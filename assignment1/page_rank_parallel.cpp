@@ -6,6 +6,8 @@
 
 #include <thread>
 #include <vector>
+#include <numeric>
+#include <mutex>
 
 #ifdef USE_INT
 #define INIT_PAGE_RANK 100000
@@ -22,163 +24,165 @@ typedef int64_t PageRankType;
 typedef float PageRankType;
 #endif
 
-/* Slides:
-#defein CURR i % 2
-#define NEXT (i + 1) % 2
-
-create T threads
-for each thread in parallel {
-  for (i=0; i<k; ++i){
-    for v in subset(V, tid){
-      sum = 0;
-      for u in inNeighbors(v){
-        sum += pr[CURR][u] / outDegree(u);
-      }
-      pr[NEXT][v] = PAGE_RANK(sum);
-    }
-    barrier();
-  }
-}
-*/
-
 struct thread_status
 {
   uint thread_id;
   double time_taken;
 };
 
-void pageRankParallel(Graph &g, int max_iters, uint n_workers) {
-  uintV n = g.n_;
+inline void pageRankCal(Graph &g, int max_iters, uintV start, uintV end, PageRankType *pr_next, PageRankType * pr_curr, uint t, thread_status &thread_status, CustomBarrier &barrier)
+{
+  timer thread_timer;
+  thread_timer.start();
+  std::mutex mtx;
+  for (int iter = 0; iter < max_iters; iter++)
+  {
+    for (uintV u = start; u <= end; u++)
+    {
+      uintE out_degree = g.vertices_[u].getOutDegree();
 
-  // Initialization
-  PageRankType *pr_curr = new PageRankType[n];
-  PageRankType *pr_next = new PageRankType[n];
-
-  for (uintV i = 0; i < n; i++) {
-    pr_curr[i] = INIT_PAGE_RANK;
-    pr_next[i] = 0.0;
-  }
-
-  // Push based pagerank
-  timer t1;
-  // timer thread_timer;
-  double time_taken = 0.0;
-  // Create threads and distribute the work across T threads
-  // -------------------------------------------------------------------
-  std::vector<std::thread> threads(n_workers);
-  std::vector<double> thread_time_taken(n_workers);
-  std::vector<thread_status> thread_status(n_workers);
-  t1.start();
-  for (int iter = 0; iter < max_iters; iter++) {
-    for (uint i = 0; i < n_workers; i++) {
-      threads[i] = std::thread([&, i]() {
-        timer thread_timer;
-        thread_timer.start();
-        for (uintV u = i; u < n; u += n_workers) {
-          uintE out_degree = g.vertices_[u].getOutDegree();
-          for (uintE i = 0; i < out_degree; i++) {
-            uintV v = g.vertices_[u].getOutNeighbor(i);
-            pr_next[v] += (pr_curr[u] / out_degree);
-          }
-        }
-        thread_status[i].thread_id = i;
-        thread_status[i].time_taken = thread_timer.stop();
-      });
+      for (uintE i = 0; i < out_degree; i++)
+      {
+        uintV v = g.vertices_[u].getOutNeighbor(i);
+        pr_next[v] += (pr_curr[u] / out_degree);
+      }
     }
-    for (uint i = 0; i < n_workers; i++) {
-      threads[i].join();
-    }
-    for (uintV v = 0; v < n; v++) {
+    barrier.wait();
+    for (uintV v = start; v <= end; v++)
+    {
+      mtx.lock();
       pr_next[v] = PAGE_RANK(pr_next[v]);
-
-      // reset pr_curr for the next iteration
       pr_curr[v] = pr_next[v];
       pr_next[v] = 0.0;
+      mtx.unlock();
     }
+    barrier.wait();
   }
-  for (uint t = 0; t < n_workers; t++)
-  {
-    threads[t].join();
-  }
-
-  time_taken = t1.stop();
-  
-
-  // t1.start();
-  // for (int iter = 0; iter < max_iters; iter++) {
-  //   // for each vertex 'u', process all its outNeighbors 'v'
-  //   for (uintV u = 0; u < n; u++) {
-  //     uintE out_degree = g.vertices_[u].getOutDegree();
-  //     for (uintE i = 0; i < out_degree; i++) {
-  //       uintV v = g.vertices_[u].getOutNeighbor(i);
-  //       pr_next[v] += (pr_curr[u] / out_degree);
-  //     }
-  //   }
-  //   for (uintV v = 0; v < n; v++) {
-  //     pr_next[v] = PAGE_RANK(pr_next[v]);
-
-  //     // reset pr_curr for the next iteration
-  //     pr_curr[v] = pr_next[v];
-  //     pr_next[v] = 0.0;
-  //   }
-  // }
-  // time_taken = t1.stop();
-  // -------------------------------------------------------------------
-  std::cout << "thread_id, time_taken\n";
-  for (uint i = 0; i < n_workers; i++) {
-    std::cout << thread_status[i].thread_id << ", " << thread_status[i].time_taken << "\n";
-  }
-  // Print the above statistics for each thread
-  // Example output for 2 threads:
-  // thread_id, time_taken
-  // 0, 0.12
-  // 1, 0.12
-
-  PageRankType sum_of_page_ranks = 0;
-  for (uintV u = 0; u < n; u++) {
-    sum_of_page_ranks += pr_curr[u];
-  }
-  std::cout << "Sum of page rank : " << sum_of_page_ranks << "\n";
-  std::cout << "Time taken (in seconds) : " << time_taken << "\n";
-  delete[] pr_curr;
-  delete[] pr_next;
+  thread_status.thread_id = t;
+  thread_status.time_taken = thread_timer.stop();
 }
 
-int main(int argc, char *argv[]) {
-  cxxopts::Options options(
-      "page_rank_push",
-      "Calculate page_rank using serial and parallel execution");
-  options.add_options(
-      "",
-      {
-          {"nWorkers", "Number of workers",
-           cxxopts::value<uint>()->default_value(DEFAULT_NUMBER_OF_WORKERS)},
-          {"nIterations", "Maximum number of iterations",
-           cxxopts::value<uint>()->default_value(DEFAULT_MAX_ITER)},
-          {"inputFile", "Input graph file path",
-           cxxopts::value<std::string>()->default_value(
-               "/scratch/input_graphs/roadNet-CA")},
-      });
+  void pageRankParallel(Graph & g, int max_iters, const uint n_workers)
+  {
+    uintV n = g.n_;
 
-  auto cl_options = options.parse(argc, argv);
-  uint n_workers = cl_options["nWorkers"].as<uint>();
-  uint max_iterations = cl_options["nIterations"].as<uint>();
-  std::string input_file_path = cl_options["inputFile"].as<std::string>();
+    // Initialization
+    PageRankType *pr_curr = new PageRankType[n];
+    PageRankType *pr_next = new PageRankType[n];
+
+    std::vector<uint> start(n_workers);
+    std::vector<uint> end(n_workers);
+
+    uint min_vertices_for_each_thread = n / n_workers;
+    uint excess_vertices = n % n_workers;
+    uint curr_vertex = 0;
+
+    for (uintV i = 0; i < n; i++)
+    {
+      pr_curr[i] = INIT_PAGE_RANK;
+      pr_next[i] = 0.0;
+    }
+
+    std::mutex mtx;
+    std::vector<std::thread> threads(n_workers);
+    std::vector<double> thread_time_taken(n_workers);
+    std::vector<thread_status> thread_status(n_workers);
+    CustomBarrier barrier(n_workers);
+
+    timer t1;
+    double time_taken = 0.0;
+
+    // Create threads and distribute the work across T threads
+    // -------------------------------------------------------------------
+
+    t1.start();
+    for (uint t = 0; t < n_workers; t++)
+    {
+      start[t] = curr_vertex;
+      if (excess_vertices > 0)
+      {
+        end[t] = curr_vertex + min_vertices_for_each_thread;
+        excess_vertices--;
+      }
+      else
+      {
+        end[t] = curr_vertex + min_vertices_for_each_thread - 1;
+      }
+      curr_vertex = end[t] + 1;
+    }
+
+    for (uint t = 0; t < n_workers; t++)
+    {
+      threads[t] = std::thread(pageRankCal, std::ref(g), max_iters, start[t], end[t], pr_next, pr_curr, t, std::ref(thread_status[t]),std::ref(barrier));
+    }
+
+    for (int t = 0; t < n_workers; t++)
+    {
+      threads[t].join();
+    }
+
+    time_taken = t1.stop();
+
+    // -------------------------------------------------------------------
+    std::cout << "thread_id, time_taken\n";
+    for (uint i = 0; i < n_workers; i++)
+    {
+      std::cout << thread_status[i].thread_id << ", " << thread_status[i].time_taken << "\n";
+    }
+    // Print the above statistics for each thread
+    // Example output for 2 threads:
+    // thread_id, time_taken
+    // 0, 0.12
+    // 1, 0.12
+
+    PageRankType sum_of_page_ranks = 0;
+    for (uintV u = 0; u < n; u++)
+    {
+      sum_of_page_ranks += pr_curr[u];
+    }
+    std::cout << "Sum of page rank : " << sum_of_page_ranks << "\n";
+    std::cout << "Time taken (in seconds) : " << time_taken << "\n";
+    delete[] pr_curr;
+    delete[] pr_next;
+  }
+
+  int main(int argc, char *argv[])
+  {
+    cxxopts::Options options(
+        "page_rank_push",
+        "Calculate page_rank using serial and parallel execution");
+    options.add_options(
+        "",
+        {
+            {"nWorkers", "Number of workers",
+             cxxopts::value<uint>()->default_value(DEFAULT_NUMBER_OF_WORKERS)},
+            {"nIterations", "Maximum number of iterations",
+             cxxopts::value<uint>()->default_value(DEFAULT_MAX_ITER)},
+            {"inputFile", "Input graph file path",
+             cxxopts::value<std::string>()->default_value(
+                 "/scratch/input_graphs/roadNet-CA")},
+        });
+
+    auto cl_options = options.parse(argc, argv);
+    uint n_workers = cl_options["nWorkers"].as<uint>();
+    uint max_iterations = cl_options["nIterations"].as<uint>();
+    std::string input_file_path = cl_options["inputFile"].as<std::string>();
 
 #ifdef USE_INT
-  std::cout << "Using INT\n";
+    std::cout << "Using INT\n";
 #else
-  std::cout << "Using FLOAT\n";
+    std::cout << "Using FLOAT\n";
 #endif
-  std::cout << std::fixed;
-  std::cout << "Number of workers : " << n_workers << "\n";
+    std::cout << std::fixed;
+    std::cout << "Number of workers : " << n_workers << "\n";
 
-  Graph g;
-  std::cout << "Reading graph\n";
-  g.readGraphFromBinary<int>(input_file_path);
-  std::cout << "Created graph\n";
-  // pageRankSerial(g, max_iterations);
-  pageRankParallel(g, max_iterations, n_workers);
+    Graph g;
+    std::cout << "Reading graph\n";
+    g.readGraphFromBinary<int>(input_file_path);
+    std::cout << "Created graph\n";
+    // pageRankSerial(g, max_iterations);
+    pageRankParallel(g, max_iterations, n_workers);
+    // pageRankParallel2(&g, max_iterations, n_workers);
 
-  return 0;
-}
+    return 0;
+  }
