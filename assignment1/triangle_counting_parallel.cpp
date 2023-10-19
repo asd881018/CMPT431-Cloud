@@ -47,7 +47,47 @@ struct thread_status
   long triangle_count;
   double time_taken;
 };
+void triangleCountSerial(Graph &g, uint n_workers)
+{
+    uintV n = g.n_;
+    long triangle_count = 0;
+    double time_taken = 0.0;
+    timer t1;
 
+    // The outNghs and inNghs for a given vertex are already sorted
+
+    // Create threads and distribute the work across T threads
+    // -------------------------------------------------------------------
+    t1.start();
+    // Process each edge <u,v>
+    for (uintV u = 0; u < n; u++)
+    {
+        // For each outNeighbor v, find the intersection of inNeighbor(u) and
+        // outNeighbor(v)
+        uintE out_degree = g.vertices_[u].getOutDegree();
+
+        for (uintE i = 0; i < out_degree; i++)
+        {
+            uintV v = g.vertices_[u].getOutNeighbor(i);
+            triangle_count += countTriangles(g.vertices_[u].getInNeighbors(),
+                                             g.vertices_[u].getInDegree(),
+                                             g.vertices_[v].getOutNeighbors(),
+                                             g.vertices_[v].getOutDegree(), u, v);
+        }
+    }
+    time_taken = t1.stop();
+    // -------------------------------------------------------------------
+    // Here, you can just print the number of non-unique triangles counted by each
+    // thread std::cout << "thread_id, triangle_count, time_taken\n"; Print the
+    // above statistics for each thread Example output for 2 threads: thread_id,
+    // triangle_count, time_taken 1, 102, 0.12 0, 100, 0.12
+
+    // Print the overall statistics
+    std::cout << "Number of triangles : " << triangle_count << "\n";
+    std::cout << "Number of unique triangles : " << triangle_count / 3 << "\n";
+    std::cout << "Time taken (in seconds) : " << std::setprecision(TIME_PRECISION)
+              << time_taken << "\n";
+}
 void triangleParallel(Graph &g, const uint &n_workers)
 {
   uint n = g.n_;
@@ -124,47 +164,7 @@ void triangleParallel(Graph &g, const uint &n_workers)
   std::cout << "Time taken (in seconds) : " << std::setprecision(TIME_PRECISION)
             << time_taken << "\n";
 }
-void triangleCountSerial(Graph &g, uint n_workers)
-{
-  uintV n = g.n_;
-  long triangle_count = 0;
-  double time_taken = 0.0;
-  timer t1;
 
-  // The outNghs and inNghs for a given vertex are already sorted
-
-  // Create threads and distribute the work across T threads
-  // -------------------------------------------------------------------
-  t1.start();
-  // Process each edge <u,v>
-  for (uintV u = 0; u < n; u++)
-  {
-    // For each outNeighbor v, find the intersection of inNeighbor(u) and
-    // outNeighbor(v)
-    uintE out_degree = g.vertices_[u].getOutDegree();
-
-    for (uintE i = 0; i < out_degree; i++)
-    {
-      uintV v = g.vertices_[u].getOutNeighbor(i);
-      triangle_count += countTriangles(g.vertices_[u].getInNeighbors(),
-                                       g.vertices_[u].getInDegree(),
-                                       g.vertices_[v].getOutNeighbors(),
-                                       g.vertices_[v].getOutDegree(), u, v);
-    }
-  }
-  time_taken = t1.stop();
-  // -------------------------------------------------------------------
-  // Here, you can just print the number of non-unique triangles counted by each
-  // thread std::cout << "thread_id, triangle_count, time_taken\n"; Print the
-  // above statistics for each thread Example output for 2 threads: thread_id,
-  // triangle_count, time_taken 1, 102, 0.12 0, 100, 0.12
-
-  // Print the overall statistics
-  std::cout << "Number of triangles : " << triangle_count << "\n";
-  std::cout << "Number of unique triangles : " << triangle_count / 3 << "\n";
-  std::cout << "Time taken (in seconds) : " << std::setprecision(TIME_PRECISION)
-            << time_taken << "\n";
-}
 
 int main(int argc, char *argv[])
 {

@@ -1,0 +1,39 @@
+Evaluating /home/cta106/CMPT431/assignments/assignment2/triangle_counting_parallel
+====================
+Testcase 1 - Executing...
+Evaluating strategy 1
+/home/cta106/CMPT431/assignments/assignment2/triangle_counting_parallel --nWorkers 4 --strategy 1 --inputFile /scratch/input_graphs/lj
+Test case 1 execution - Exited with exit code : 0
+Test case 1 - Evaluating...
+VALIDATION FAILED: Thread statistics only found for 0 threads
+Validation failed. Check your output format. Ensure that it matches with the sample output format
+Test case 1 - Evaluation script exited with exit code : 1
+
+====================
+Testcase 2 - Executing...
+Evaluating strategy 2
+/home/cta106/CMPT431/assignments/assignment2/triangle_counting_parallel --nWorkers 4 --strategy 2 --inputFile /scratch/input_graphs/lj
+Test case 2 execution - Exited with exit code : 0
+Test case 2 - Evaluating...
+VALIDATION FAILED: Total triangles found = 0
+VALIDATION FAILED: Total unique triangles = 0
+VALIDATION FAILED: Partitioning time not printed.
+VALIDATION FAILED: Time taken = 0.0
+VALIDATION FAILED: Thread statistics only found for 0 threads
+Validation failed. Check your output format. Ensure that it matches with the sample output format
+Test case 2 - Evaluation script exited with exit code : 1
+
+====================
+Testcase 3 - Executing...
+Evaluating strategy 3
+/home/cta106/CMPT431/assignments/assignment2/triangle_counting_parallel --nWorkers 4 --strategy 3 --inputFile /scratch/input_graphs/lj
+Test case 3 execution - Exited with exit code : 0
+Test case 3 - Evaluating...
+VALIDATION FAILED: Total triangles found = 0
+VALIDATION FAILED: Total unique triangles = 0
+VALIDATION FAILED: Partitioning time not printed.
+VALIDATION FAILED: Time taken = 0.0
+VALIDATION FAILED: Thread statistics only found for 0 threads
+Validation failed. Check your output format. Ensure that it matches with the sample output format
+Test case 3 - Evaluation script exited with exit code : 1
+

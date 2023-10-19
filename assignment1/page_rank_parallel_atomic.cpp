@@ -7,7 +7,6 @@
 #include <thread>
 #include <vector>
 #include <numeric>
-#include <mutex>
 
 #ifdef USE_INT
 #define INIT_PAGE_RANK 100000
@@ -24,17 +23,13 @@ typedef int64_t PageRankType;
 typedef float PageRankType;
 #endif
 
-struct thread_time
-{
-  uint thread_id;
-  double time_taken;
-};
-
-inline void pageRankCal(Graph &g, int max_iters, uintV start, uintV end, PageRankType *pr_next, PageRankType *pr_curr, uint t, thread_time &thread_time, CustomBarrier &barrier)
+inline void pageRankCal(Graph &g, int max_iters, uintV start, uintV end, std::atomic<PageRankType> *pr_next, PageRankType *pr_curr, uint t, double &thread_time, CustomBarrier &barrier)
 {
   timer thread_timer;
   thread_timer.start();
-  std::mutex mtx;
+  PageRankType old_value;
+  PageRankType new_value;
+
   for (int iter = 0; iter < max_iters; iter++)
   {
     for (uintV u = start; u <= end; u++)
@@ -44,22 +39,31 @@ inline void pageRankCal(Graph &g, int max_iters, uintV start, uintV end, PageRan
       for (uintE i = 0; i < out_degree; i++)
       {
         uintV v = g.vertices_[u].getOutNeighbor(i);
-        mtx.lock();
-        pr_next[v] += (pr_curr[u] / out_degree);
-        mtx.unlock();
+        PageRankType delta = pr_curr[u] / (PageRankType)out_degree;
+        // Use atomic compare_exchange to update pr_next[v]
+        old_value = pr_next[v].load(std::memory_order_relaxed);
+        new_value = old_value + delta;
+
+        // Use compare_exchange_weak to atomically update pr_next[v]
+        // https://en.cppreference.com/w/cpp/atomic/atomic/compare_exchange
+        while (!pr_next[v].compare_exchange_weak(old_value, new_value, std::memory_order_relaxed))
+        {
+          // Retry until successful atomic update
+          new_value = old_value + delta;
+        }
       }
     }
     barrier.wait();
     for (uintV v = start; v <= end; v++)
     {
-      pr_next[v] = PAGE_RANK(pr_next[v]);
-      pr_curr[v] = pr_next[v];
-      pr_next[v] = 0.0;
+      PageRankType new_value = PAGE_RANK(pr_next[v].load());
+      pr_curr[v] = new_value;
+      pr_next[v].store(static_cast<PageRankType>(0));
     }
     barrier.wait();
   }
-  thread_time.thread_id = t;
-  thread_time.time_taken = thread_timer.stop();
+  // thread_time.thread_id = t;
+  thread_time = thread_timer.stop();
 }
 
 void pageRankParallel(Graph &g, int max_iters, const uint n_workers)
@@ -67,27 +71,26 @@ void pageRankParallel(Graph &g, int max_iters, const uint n_workers)
   // Initialization
   uintV n = g.n_;
   PageRankType *pr_curr = new PageRankType[n];
-  PageRankType *pr_next = new PageRankType[n];
+  std::atomic<PageRankType> *pr_next = new std::atomic<PageRankType>[n];
   std::vector<uint> start(n_workers);
   std::vector<uint> end(n_workers);
-  // std::mutex mtx;
   std::vector<std::thread> threads(n_workers);
   std::vector<double> thread_time_taken(n_workers);
-  std::vector<thread_time> thread_times(n_workers);
+  // std::vector<thread_time> thread_times(n_workers);
+  std::vector<double> thread_times(n_workers);
   CustomBarrier barrier(n_workers);
-
   const uint thread_min_vertice = n / n_workers;
-  uint remainder_vertice = n % n_workers;
+  uint remander_vertice = n % n_workers;
   uint curr_vertex = 0;
-
-  timer t1;
-  double time_taken = 0.0;
 
   for (uintV i = 0; i < n; i++)
   {
     pr_curr[i] = INIT_PAGE_RANK;
     pr_next[i] = 0.0;
   }
+
+  timer t1;
+  double time_taken = 0.0;
 
   // Create threads and distribute the work across T threads
   // -------------------------------------------------------------------
@@ -98,14 +101,14 @@ void pageRankParallel(Graph &g, int max_iters, const uint n_workers)
   for (uint i = 0; i < n_workers; i++)
   {
     start[i] = curr_vertex;
-    if (remainder_vertice > 0)
+    if (remander_vertice > 0)
     {
-      end[i] = curr_vertex + thread_min_vertice + 1;
-      remainder_vertice--;
+      end[i] = curr_vertex + thread_min_vertice;
+      remander_vertice--;
     }
     else
     {
-      end[i] = curr_vertex + thread_min_vertice;
+      end[i] = curr_vertex + thread_min_vertice - 1;
     }
     curr_vertex = end[i] + 1;
   }
@@ -126,7 +129,7 @@ void pageRankParallel(Graph &g, int max_iters, const uint n_workers)
   std::cout << "thread_id, time_taken\n";
   for (uint i = 0; i < n_workers; i++)
   {
-    std::cout << thread_times[i].thread_id << ", " << thread_times[i].time_taken << "\n";
+    std::cout << i << ", " << thread_times[i] << "\n";
   }
   // Print the above statistics for each thread
   // Example output for 2 threads:
