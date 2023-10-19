@@ -6,15 +6,9 @@ Evaluating strategy 1
 Test case 1 execution - Exited with exit code : 0
 Test case 1 - Evaluating...
 Validation successful
-WARNING : Partitioning time higher than expected.
-Your partitioning time : 1697705187.33. Expected : 0.0001
-WARNING : Your parallel execution time (1697705248.09) is more than the serial execution time (76.0).
-Ideally, your execution time should less than  76.0
-Your parallel execution time, T : 1697705248.09 seconds
+Your parallel execution time, T : 55.85188 seconds
 Expected parallel execution time, T_expected : 61.0 seconds
 Ideally, T should be equal to (or less than) T_expected
-WARNING : Your parallel execution time (1697705248.09 seconds) is more than 1.5 times higher than the expected parallel execution time (61.0 seconds).
-Ideally, your execution time should be around 61.0 seconds
 Evaluation successful
 Test case 1 - Evaluation script exited with exit code : 0
 

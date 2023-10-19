@@ -41,6 +41,21 @@ struct thread_status
     double time_taken;
 };
 
+void printTriangleCountStatistics ( const std::vector<thread_status>& thread_status, int n_workers, long triangle_count, double partitionTime, double time_taken){
+    std::cout << "thread_id, num_vertices, num_edges, triangle_count, time_taken\n";
+    for (uint t = 0; t < n_workers; t++)
+    {
+        std::cout << thread_status[t].thread_id << ", " << thread_status[t].num_vertices << ", " << thread_status[t].num_edges << ", " << thread_status[t].triangle_count << ", " << thread_status[t].time_taken << "\n";
+        triangle_count += thread_status[t].triangle_count;
+    }
+
+    // Print the overall statistics
+    std::cout << "Number of triangles : " << triangle_count << "\n";
+    std::cout << "Number of unique triangles : " << triangle_count / 3 << "\n";
+    std::cout << "Partitioning time (in seconds) : " << std::setprecision(TIME_PRECISION) << partitionTime << "\n";
+    std::cout << "Time taken (in seconds) : " << std::setprecision(TIME_PRECISION)
+              << time_taken << "\n";
+}
 void triangleCountSerial(Graph &g) {
     uintV n = g.n_;
     long triangle_count = 0;
@@ -64,7 +79,7 @@ void triangleCountSerial(Graph &g) {
               << time_taken << "\n";
 }
 
-void triangleCountParallel(Graph &g, const uint &n_workers)
+void triangleCountParallelStrategyOne(Graph &g, const uint &n_workers)
 {
     uint n = g.n_;
 
@@ -84,6 +99,7 @@ void triangleCountParallel(Graph &g, const uint &n_workers)
     std::vector<std::thread> threads(n_workers);
     std::vector<thread_status> thread_status(n_workers);
 
+    total_time.start();
     for (uint t = 0; t < n_workers; t++)
     {
         thread_timer.start();
@@ -92,6 +108,7 @@ void triangleCountParallel(Graph &g, const uint &n_workers)
             long triangle_count = 0;
             double time_taken = 0.0;
             timer t1, t2;
+            t2.start();
             uintV start = t * num_vertices;
             uintV end = (t + 1) * num_vertices;
             double t_partitionTime = t2.stop();
@@ -130,21 +147,14 @@ void triangleCountParallel(Graph &g, const uint &n_workers)
         threads[t].join();
     }
     time_taken = total_time.stop();
-    std::cout << "thread_id, num_vertices, num_edges, triangle_count, time_taken\n";
-    for (uint t = 0; t < n_workers; t++)
-    {
-        std::cout << thread_status[t].thread_id << ", " << thread_status[t].num_vertices << ", " << thread_status[t].num_edges << ", " << thread_status[t].triangle_count << ", " << thread_status[t].time_taken << "\n";
-        triangle_count += thread_status[t].triangle_count;
-    }
 
-    // Print the overall statistics
-    std::cout << "Number of triangles : " << triangle_count << "\n";
-    std::cout << "Number of unique triangles : " << triangle_count / 3 << "\n";
-    std::cout << "Partitioning time (in seconds) : " << std::setprecision(TIME_PRECISION) << partitionTime << "\n";
-    std::cout << "Time taken (in seconds) : " << std::setprecision(TIME_PRECISION)
-              << time_taken << "\n";
+    printTriangleCountStatistics(thread_status, n_workers,triangle_count, partitionTime, time_taken);
+  
 }
 
+void triangleCountParallelStrategyTwo(Graph &g, const uint &n_workers){
+  
+}
 int main(int argc, char *argv[]) {
   cxxopts::Options options(
       "triangle_counting_serial",
@@ -181,10 +191,11 @@ int main(int argc, char *argv[]) {
     break;
   case 1:
     std::cout << "\nVertex-based work partitioning\n";
-    triangleCountParallel(g, n_workers);
+    triangleCountParallelStrategyOne(g, n_workers);
     break;
   case 2:
     std::cout << "\nEdge-based work partitioning\n";
+    triangleCountParallelStrategyTwo(g, n_workers);
     break;
   case 3:
     std::cout << "\nDynamic task mapping\n";
