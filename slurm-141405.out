@@ -1,0 +1,121 @@
+Evaluating /home/cta106/CMPT431/assignments/assignment2/page_rank_parallel
+====================
+Testcase 1 - Executing...
+Evaluating strategy 1
+/home/cta106/CMPT431/assignments/assignment2/page_rank_parallel --nWorkers 4 --strategy 1 --granularity 1 --nIterations 20 --inputFile /scratch/input_graphs/lj
+Test case 1 execution - Exited with exit code : 0
+Test case 1 - Evaluating...
+Validation successful
+Using FLOAT
+Your parallel execution time, T : 42.998292 seconds
+Expected parallel execution time, T_expected : 46.0 seconds
+Ideally, T should be equal to (or less than) T_expected
+Evaluation successful
+Reading scratchFile...
+Using FLOAT
+Number of workers : 4
+Task decomposition strategy : 1
+Iterations : 20
+Iterations : 20
+Granularity : 1
+Reading graph
+Created graph
+
+Vertex-based work partitioning
+thread_id, num_vertices, num_edges, barrier1_time, barrier2_time, getNextVertex_time, total_time
+0, 24237860, 858402860, 0.000046, 0.000295, 0.000000, 42.997682
+1, 24237860, 310313820, 1.145120, 0.000111, 0.000000, 42.997663
+2, 24237860, 142828900, 1.599204, 0.000027, 0.000000, 42.997620
+3, 24237840, 68329880, 1.869281, 0.000043, 0.000000, 42.988020
+Sum of page rank : 3987663.750000
+Partitioning time (in seconds) : 0.000001
+Time taken (in seconds) : 42.998292
+
+Test case 1 - Evaluation script exited with exit code : 0
+
+====================
+Testcase 2 - Executing...
+Evaluating strategy 2
+/home/cta106/CMPT431/assignments/assignment2/page_rank_parallel --nWorkers 4 --strategy 2 --granularity 1 --nIterations 20 --inputFile /scratch/input_graphs/lj
+Test case 2 execution - Exited with exit code : 0
+Test case 2 - Evaluating...
+Validation successful
+Using FLOAT
+Your parallel execution time, T : 1697843440.81 seconds
+Expected parallel execution time, T_expected : 33.0 seconds
+Ideally, T should be equal to (or less than) T_expected
+WARNING : Your parallel execution time (1697843440.81 seconds) is more than 1.5 times higher than the expected parallel execution time (33.0 seconds).
+Ideally, your execution time should be around 33.0 seconds
+Evaluation successful
+Reading scratchFile...
+Using FLOAT
+Number of workers : 4
+Task decomposition strategy : 2
+Iterations : 20
+Iterations : 20
+Granularity : 1
+Reading graph
+Created graph
+
+Edge-based work partitioning
+thread_id, num_vertices, num_edges, barrier1_time, barrier2_time, getNextVertex_time, total_time
+0, 6510820, 344969020, 0.083378, 0.105935, 0.000000, 23.777512
+1, 10210900, 344968840, 0.084456, 0.098617, 0.000000, 23.777495
+2, 18080820, 344968920, 0.023921, 0.083288, 0.000000, 23.777453
+3, 62148880, 344968680, 0.000036, 0.000028, 0.000000, 23.759606
+Sum of page rank : 3987663.750000
+Partitioning time (in seconds) : 0.026254
+Time taken (in seconds) : 1697843440.807166
+
+Test case 2 - Evaluation script exited with exit code : 0
+
+====================
+Testcase 3 - Executing...
+Evaluating strategy 3
+/home/cta106/CMPT431/assignments/assignment2/page_rank_parallel --nWorkers 4 --strategy 3 --granularity 1 --nIterations 20 --inputFile /scratch/input_graphs/lj
+Test case 3 execution - Exited with exit code : 0
+Test case 3 - Evaluating...
+VALIDATION FAILED: Sum of page rank = 0
+VALIDATION FAILED: Partitioning time not printed.
+VALIDATION FAILED: Time taken = 0.0
+VALIDATION FAILED: Thread statistics only found for 0 threads
+Validation failed
+Reading scratchFile...
+Using FLOAT
+Number of workers : 4
+Task decomposition strategy : 3
+Iterations : 20
+Iterations : 20
+Granularity : 1
+Reading graph
+Created graph
+
+Dynamic task mapping
+
+Test case 3 - Evaluation script exited with exit code : 1
+
+====================
+Testcase 4 - Executing...
+Evaluating strategy 3
+/home/cta106/CMPT431/assignments/assignment2/page_rank_parallel --nWorkers 4 --strategy 3 --granularity 4000 --nIterations 20 --inputFile /scratch/input_graphs/lj
+Test case 4 execution - Exited with exit code : 0
+Test case 4 - Evaluating...
+VALIDATION FAILED: Sum of page rank = 0
+VALIDATION FAILED: Partitioning time not printed.
+VALIDATION FAILED: Time taken = 0.0
+VALIDATION FAILED: Thread statistics only found for 0 threads
+Validation failed
+Reading scratchFile...
+Using FLOAT
+Number of workers : 4
+Task decomposition strategy : 3
+Iterations : 20
+Iterations : 20
+Granularity : 4000
+Reading graph
+Created graph
+
+Dynamic task mapping
+
+Test case 4 - Evaluation script exited with exit code : 1
+
