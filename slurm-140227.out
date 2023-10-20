@@ -6,7 +6,7 @@ Evaluating strategy 1
 Test case 1 execution - Exited with exit code : 0
 Test case 1 - Evaluating...
 Validation successful
-Your parallel execution time, T : 52.59448 seconds
+Your parallel execution time, T : 63.16043 seconds
 Expected parallel execution time, T_expected : 61.0 seconds
 Ideally, T should be equal to (or less than) T_expected
 Evaluation successful
@@ -16,17 +16,14 @@ Test case 1 - Evaluation script exited with exit code : 0
 Testcase 2 - Executing...
 Evaluating strategy 2
 /home/cta106/CMPT431/assignments/assignment2/triangle_counting_parallel --nWorkers 4 --strategy 2 --inputFile /scratch/input_graphs/lj
-Test case 2 execution - Exited with exit code : -11
+Test case 2 execution - Exited with exit code : 0
 Test case 2 - Evaluating...
-VALIDATION FAILED: Incorrect number of workers used = 0
-VALIDATION FAILED: Incorrect strategy used = 0
-VALIDATION FAILED: Total triangles found = 0
-VALIDATION FAILED: Total unique triangles = 0
-VALIDATION FAILED: Partitioning time not printed.
-VALIDATION FAILED: Time taken = 0.0
-VALIDATION FAILED: Thread statistics only found for 0 threads
-Validation failed. Check your output format. Ensure that it matches with the sample output format
-Test case 2 - Evaluation script exited with exit code : 1
+Validation successful
+Your parallel execution time, T : 30.25563 seconds
+Expected parallel execution time, T_expected : 31.0 seconds
+Ideally, T should be equal to (or less than) T_expected
+Evaluation successful
+Test case 2 - Evaluation script exited with exit code : 0
 
 ====================
 Testcase 3 - Executing...
@@ -34,11 +31,10 @@ Evaluating strategy 3
 /home/cta106/CMPT431/assignments/assignment2/triangle_counting_parallel --nWorkers 4 --strategy 3 --inputFile /scratch/input_graphs/lj
 Test case 3 execution - Exited with exit code : 0
 Test case 3 - Evaluating...
-VALIDATION FAILED: Total triangles found = 0
-VALIDATION FAILED: Total unique triangles = 0
-VALIDATION FAILED: Partitioning time not printed.
-VALIDATION FAILED: Time taken = 0.0
-VALIDATION FAILED: Thread statistics only found for 0 threads
-Validation failed. Check your output format. Ensure that it matches with the sample output format
-Test case 3 - Evaluation script exited with exit code : 1
+Validation successful
+Your parallel execution time, T : 23.96276 seconds
+Expected parallel execution time, T_expected : 21.0 seconds
+Ideally, T should be equal to (or less than) T_expected
+Evaluation successful
+Test case 3 - Evaluation script exited with exit code : 0
 

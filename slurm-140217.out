@@ -6,7 +6,7 @@ Evaluating strategy 1
 Test case 1 execution - Exited with exit code : 0
 Test case 1 - Evaluating...
 Validation successful
-Your parallel execution time, T : 58.9295 seconds
+Your parallel execution time, T : 52.78799 seconds
 Expected parallel execution time, T_expected : 61.0 seconds
 Ideally, T should be equal to (or less than) T_expected
 Evaluation successful
@@ -19,7 +19,7 @@ Evaluating strategy 2
 Test case 2 execution - Exited with exit code : 0
 Test case 2 - Evaluating...
 Validation successful
-Your parallel execution time, T : 28.56561 seconds
+Your parallel execution time, T : 26.22296 seconds
 Expected parallel execution time, T_expected : 31.0 seconds
 Ideally, T should be equal to (or less than) T_expected
 Evaluation successful
@@ -31,11 +31,13 @@ Evaluating strategy 3
 /home/cta106/CMPT431/assignments/assignment2/triangle_counting_parallel --nWorkers 4 --strategy 3 --inputFile /scratch/input_graphs/lj
 Test case 3 execution - Exited with exit code : 0
 Test case 3 - Evaluating...
-VALIDATION FAILED: Total triangles found = 0
-VALIDATION FAILED: Total unique triangles = 0
-VALIDATION FAILED: Partitioning time not printed.
-VALIDATION FAILED: Time taken = 0.0
-VALIDATION FAILED: Thread statistics only found for 0 threads
-Validation failed. Check your output format. Ensure that it matches with the sample output format
-Test case 3 - Evaluation script exited with exit code : 1
+Validation successful
+EVALUATION FAILED : Total number of vertices processed is incorrect(0). Expected 4847571
+EVALUATION FAILED : Total number of edges processed is incorrect(0). Expected 68993773
+Your parallel execution time, T : 19.03646 seconds
+Expected parallel execution time, T_expected : 21.0 seconds
+Ideally, T should be equal to (or less than) T_expected
+Evaluation failed.
+Ensure that you do not print more data than expected and the expected output format is strictly followed
+Test case 3 - Evaluation script exited with exit code : 0
 

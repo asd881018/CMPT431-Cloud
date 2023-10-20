@@ -184,7 +184,6 @@ void triangleCountParallelStrategyTwo(Graph &g, const uint &n_workers)
   std::vector<int> start_vertex(n_workers);
   std::vector<int> end_vertex(n_workers);
 
-
   uintV current_vertex = -1;
   uintV current_edges = 0;
 
@@ -257,6 +256,77 @@ void triangleCountParallelStrategyTwo(Graph &g, const uint &n_workers)
 
   printTriangleCountStatistics(thread_status, n_workers, triangle_count, partitionTime, time_taken);
 }
+
+void triangleCountParallelStrategyThree(Graph &g, const uint &n_workers)
+{
+  long triangle_count = 0;
+  double time_taken = 0.0;
+  double partitionTime = 0.0;
+  timer total_time;
+  timer thread_timer;
+
+  uint n = g.n_;
+  uint m = g.m_;
+
+  // Define a function to get the next vertex to be processed
+  std::mutex mtx; // Mutex to protect access to vertex processing
+  uintV next_vertex = 0; // Initialize to process the first vertex
+
+  std::vector<std::thread> threads (n_workers);
+  std::vector<thread_status> thread_status(n_workers);
+
+  total_time.start();
+  for (uint t = 0; t < n_workers; t++)
+  {
+    threads[t] = std::thread([&g, t, &thread_status, &n_workers, &partitionTime, &next_vertex, &mtx]()
+                             {
+      uintV n = g.n_;
+      long num_vertices = 0;
+      long num_edges = 0;
+      long local_triangle_count = 0;
+      double time_taken = 0.0;
+      timer t1;
+
+      while (true) {
+        uintV v;
+        {
+          std::lock_guard<std::mutex> lock(mtx);
+          v = next_vertex;
+          next_vertex++;
+        }
+
+        if (v >= n) {
+          break; // No more vertices to process
+        }
+
+        // Compute the number of triangles created by vertex v and its outNeighbors
+        uintE out_degree = g.vertices_[v].getOutDegree();
+        num_vertices++;
+        num_edges += out_degree;
+
+        for (uintE i = 0; i < out_degree; i++) {
+          uintV u = g.vertices_[v].getOutNeighbor(i);
+          local_triangle_count += countTriangles(g.vertices_[v].getInNeighbors(),
+                                                g.vertices_[v].getInDegree(),
+                                                g.vertices_[u].getOutNeighbors(),
+                                                g.vertices_[u].getOutDegree(), v, u);
+        }
+      }
+
+      // Store the thread's status
+      time_taken = t1.stop();
+      thread_status[t] = {t, num_vertices, num_edges, local_triangle_count, time_taken}; });
+  }
+
+  for (uint t = 0; t < n_workers; t++)
+  {
+    threads[t].join();
+  }
+  time_taken = total_time.stop();
+
+  printTriangleCountStatistics(thread_status, n_workers, triangle_count, partitionTime, time_taken);
+}
+
 int main(int argc, char *argv[])
 {
   cxxopts::Options options(
@@ -303,6 +373,7 @@ int main(int argc, char *argv[])
     break;
   case 3:
     std::cout << "\nDynamic task mapping\n";
+    triangleCountParallelStrategyThree(g, n_workers);
     break;
   default:
     break;
