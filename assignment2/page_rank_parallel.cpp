@@ -300,6 +300,144 @@ void pageRankParallelStrategyTwo(Graph &g, int max_iters, const uint n_workers)
   delete[] pr_next;
 }
 
+std::atomic<long> vertex1, vertex2;
+
+void addAtomic(std::atomic<PageRankType> &pr, PageRankType value)
+{
+  PageRankType prev_pr = pr.load(std::memory_order_consume);
+  PageRankType desired_pr = prev_pr + value;
+
+  while (!pr.compare_exchange_weak(prev_pr, desired_pr, std::memory_order_release, std::memory_order_consume))
+  {
+    desired_pr = prev_pr + value;
+  }
+}
+
+long getNextVertexToBeProcessed(std::atomic<long> &vertex, uint granularity)
+{
+  return vertex.fetch_add(granularity, std::memory_order_relaxed);
+}
+
+void pageRankDynamicCal(Graph &g, uint max_iters, PageRankType *pr_curr, std::atomic<PageRankType> *pr_next, uint thread_id, thread_status &thread_status, CustomBarrier &barrier, uint granularity)
+{
+  uintV n = g.n_;
+  uint num_edges = 0, num_vertices = 0;
+  double time_taken = 0.0, barrier_1_time = 0.0, barrier_2_time = 0.0, wait_vertex_time = 0.0;
+  timer thread_timer, barrier1_timer, barrier2_timer, vertex_timer;
+
+  thread_timer.start();
+
+  for (uint iter = 0; iter < max_iters; iter++)
+  {
+    // for each vertex 'u', process all its outNeighbors 'v'
+    while (1)
+    {
+      vertex_timer.start();
+      uintV u = getNextVertexToBeProcessed(vertex1, granularity);
+      wait_vertex_time += vertex_timer.stop();
+      if (u == -1 || u >= n)
+        break;
+
+      for (uint j = 0; j < granularity; j++)
+      {
+        uintE out_degree = g.vertices_[u].getOutDegree();
+        num_edges += out_degree;
+
+        for (uintE i = 0; i < out_degree; i++)
+        {
+          uintV v = g.vertices_[u].getOutNeighbor(i);
+          addAtomic(pr_next[v], pr_curr[u] / out_degree);
+        }
+  
+        u++;
+
+        if (u >= n)
+          break;
+      }
+    }
+    barrier1_timer.start();
+    barrier.wait();
+    barrier_1_time += barrier1_timer.stop();
+
+    vertex1 = 0;
+
+    while (1)
+    {
+      vertex_timer.start();
+      uintV v = getNextVertexToBeProcessed(vertex2, granularity);
+      wait_vertex_time += vertex_timer.stop();
+
+      if (v == -1 || v >= n)
+        break;
+
+      for (uint j = 0; j < granularity; j++)
+      {
+        num_vertices++;
+        pr_next[v] = PAGE_RANK(pr_next[v]);
+
+        // reset pr_curr for the next iteration
+        pr_curr[v] = pr_next[v];
+        pr_next[v] = 0.0;
+        v++;
+        
+        if (v >= n)
+          break;
+      }
+    }
+    barrier2_timer.start();
+    barrier.wait();
+    barrier_2_time += barrier2_timer.stop();
+    vertex2 = 0;
+  }
+  time_taken = thread_timer.stop();
+
+  thread_status = {thread_id, num_vertices, num_edges, barrier_1_time, barrier_2_time, wait_vertex_time, time_taken};
+}
+
+void pageRankParallelStrategyThree(Graph &g, int max_iters, const uint n_workers, const uint granularity)
+{
+  uintV n = g.n_;
+  PageRankType *pr_curr = new PageRankType[n];
+  std::atomic<PageRankType> *pr_next = new std::atomic<PageRankType>[n];
+  timer total_timer;
+  double time_taken = 0.0, partition_time = 0.0;
+
+  std::vector<std::thread> threads(n_workers);
+  std::vector<thread_status> thread_status(n_workers);
+  CustomBarrier barrier(n_workers);
+
+  for (uintV i = 0; i < n; i++)
+  {
+    pr_curr[i] = INIT_PAGE_RANK;
+    pr_next[i] = 0.0;
+  }
+
+  total_timer.start();
+  for (uint t = 0; t < n_workers; t++)
+  {
+    threads[t] = std::thread(pageRankDynamicCal, std::ref(g), max_iters, pr_curr, pr_next, t, std::ref(thread_status[t]), std::ref(barrier), granularity);
+  }
+
+  for (uint t = 0; t < n_workers; t++)
+  {
+    threads[t].join();
+  }
+  time_taken = total_timer.stop();
+
+  PageRankType sum_of_page_ranks = 0;
+  for (uintV u = 0; u < n; u++)
+  {
+    sum_of_page_ranks += pr_curr[u];
+  }
+  std::cout << "Sum of page rank : " << sum_of_page_ranks << "\n";
+  std::cout << "Time taken (in seconds) : " << time_taken << "\n";
+
+  printPageRankCountStatistics(thread_status, n_workers, sum_of_page_ranks, partition_time, time_taken);
+
+  delete[] pr_curr;
+  delete[] pr_next;
+}
+
 int main(int argc, char *argv[])
 {
   cxxopts::Options options(
@@ -360,6 +498,7 @@ int main(int argc, char *argv[])
     break;
   case 3:
     std::cout << "\nDynamic task mapping\n";
+    pageRankParallelStrategyThree(g, max_iterations, n_workers, granularity);
     break;
   default:
     break;
