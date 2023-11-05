@@ -124,6 +124,7 @@ void triangleCountParallelStrategyOne(Graph &g, const uint &n_workers)
             long triangle_count = 0;
             double time_taken = 0.0;
             timer t1, t2;
+            t1.start();
             t2.start();
             uintV start = t * num_vertices;
             uintV end = (t + 1) * num_vertices;
@@ -287,6 +288,7 @@ void triangleCountParallelStrategyThree(Graph &g, const uint &n_workers)
       double time_taken = 0.0;
       timer t1;
 
+      t1.start();
       while (true) {
         uintV v;
         {
