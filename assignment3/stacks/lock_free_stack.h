@@ -3,7 +3,6 @@
 #define LFENCE asm volatile("lfence" : : : "memory")
 #define SFENCE asm volatile("sfence" : : : "memory")
 
-
 template <class P>
 struct pointer_t
 {
@@ -40,6 +39,7 @@ class LockFreeStack
 {
     pointer_t<Node<T>> top;
     CustomAllocator my_allocator_;
+
 public:
     LockFreeStack() : my_allocator_()
     {
@@ -58,7 +58,7 @@ public:
             exit(EXIT_FAILURE);
         }
         newNode->next.ptr = nullptr;
-        top.ptr = newNode->next.ptr;
+        top.ptr = newNode;
         my_allocator_.freeNode(newNode);
     }
 
@@ -75,22 +75,25 @@ public:
             exit(EXIT_FAILURE);
         }
         newNode->value = value;
-        pointer_t<Node<T>> pTop;
-        pointer_t<Node<T>> next;
+        pointer_t<Node<T>> top_ptr;
+        pointer_t<Node<T>> next_ptr;
         pointer_t<Node<T>> node_ptr;
         SFENCE;
-        while(true){
-            pTop = top;
+        while (true)
+        {
+            top_ptr = top;
             LFENCE;
-            next = pTop.address()->next;
+            next_ptr = top_ptr.address()->next;
             LFENCE;
-            node_ptr.ptr = pTop.ptr;
-            newNode->next.ptr = next.ptr;
-            if (top.ptr == node_ptr.ptr){
-                node_ptr.ptr = next.ptr;
+            // node_ptr.ptr = top_ptr.ptr;
+            // newNode->next.ptr = next_ptr.ptr;
+            if (top.ptr == top_ptr.ptr)
+            {
+                newNode->next.ptr = next_ptr.ptr;
                 LFENCE;
-                node_ptr = node_ptr.newPointer(newNode, node_ptr.count() + 1);
-                if (CAS(&pTop.address()->next, next, node_ptr)){
+                node_ptr.ptr = node_ptr.newPointer(newNode, next_ptr.count() + 1);
+                if (CAS(&top_ptr.address()->next, next_ptr, node_ptr))
+                {
                     break;
                 }
             }
@@ -105,26 +108,30 @@ public:
      */
     bool pop(T *value)
     {
-        pointer_t<Node<T>> pTop;
-        pointer_t<Node<T>> next;
+        pointer_t<Node<T>> top_ptr;
+        pointer_t<Node<T>> next_ptr;
         pointer_t<Node<T>> node_ptr;
-        while(true){
-            pTop = top.ptr->next;
+        while (true)
+        {
+            top_ptr = top.ptr->next;
             LFENCE;
-            if (pTop,ptr == nullptr){
+            if (top_ptr.ptr == nullptr)
+            {
                 return false;
             }
-            next = pTop.ptr->next;
+            next_ptr = top_ptr.ptr->next;
             LFENCE;
-            if (pTop.address() == top.address()->next.address()){
-                *value = pTop.address()->value;
-                node_ptr.ptr = node_ptr.newPointer(next.address(), pTop.count() + 1);
-                if (CAS(&top.ptr->next, pTop, node_ptr)){
+            if (top_ptr.address() == top.address()->next.address())
+            {
+                *value = top_ptr.address()->value;
+                node_ptr.ptr = node_ptr.newPointer(next_ptr.address(), top_ptr.count() + 1);
+                if (CAS(&top.ptr->next, top_ptr, node_ptr))
+                {
                     break;
                 }
             }
         }
-        my_allocator_.freeNode(pTop.address());
+        my_allocator_.freeNode(top_ptr.address());
         return true;
     }
 
