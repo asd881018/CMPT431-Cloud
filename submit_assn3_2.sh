@@ -15,19 +15,27 @@
 # done
 
 # Array of producer/consumer counts
-producer_consumer_counts=(1 2 4)
+# producer_consumer_counts=(1 2 4)
 
-for count in "${producer_consumer_counts[@]}"
+# for count in "${producer_consumer_counts[@]}"
+# do
+#     echo "Testing with $count producers and $count consumers"
+#     for i in {1..10}
+#     do
+#         echo "Run number: $i for $count producers/consumers"
+
+#         srun /home/cta106/CMPT431/assignments/assignment3/non_blocking_queue_throughput --n_producers $count --n_consumers $count --seconds 5 --init_allocator 100000000
+#         srun /home/cta106/CMPT431/assignments/assignment3/two_lock_queue_throughput --n_producers $count --n_consumers $count --seconds 5 --init_allocator 100000000
+#         srun /home/cta106/CMPT431/assignments/assignment3/one_lock_queue_throughput --n_producers $count --n_consumers $count --seconds 5 --init_allocator 100000000
+#     done
+# done
+
+for i in {1..10}
 do
-    echo "Testing with $count producers and $count consumers"
-    for i in {1..10}
-    do
-        echo "Run number: $i for $count producers/consumers"
+    echo "Run number: $i"
 
-        srun /home/cta106/CMPT431/assignments/assignment3/non_blocking_queue_throughput --n_producers $count --n_consumers $count --seconds 5 --init_allocator 100000000
-        srun /home/cta106/CMPT431/assignments/assignment3/two_lock_queue_throughput --n_producers $count --n_consumers $count --seconds 5 --init_allocator 100000000
-        srun /home/cta106/CMPT431/assignments/assignment3/one_lock_queue_throughput --n_producers $count --n_consumers $count --seconds 5 --init_allocator 100000000
-    done
+    srun /home/cta106/CMPT431/assignments/assignment3/one_lock_stack_throughput --n_producers 4 --n_consumers 4 --seconds 5 --init_allocator 100000000
+    srun /home/cta106/CMPT431/assignments/assignment3/lock_free_stack_throughput --n_producers 4 --n_consumers 4 --seconds 5 --init_allocator 100000000
 done
 
 # ### throughput
