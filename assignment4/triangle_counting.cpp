@@ -118,83 +118,121 @@ void assignVertices(Graph &g, uintV* verticesArray, uintV n, uintE m, uint proce
   }
 }
 
-void triangleCountMPI(Graph &g, uint processes, uint rank)
+void triangleCountMPI(Graph &g, ,uint processes, uint rank, uintV *verticesArray)
 {
   uint n = g.n_;
-  uint processes = g.m_;
+  // uint processes = g.m_;
   uint start_vertex = 0, end_vertex = 0;
 
   const int edges_per_process = n / processes;
   int remainder = n % processes;
   long local_count = 0, global_count = 0;
 
-  // Initialize the MPI environment
-  MPI_Status status;
-  MPI_Init(NULL, NULL);
+  // TODO: Timers
 
-  int global_rank;
-  MPI_Comm_rank(MPI_COMM_WORLD, &global_rank);
 
-  for (int i; i < processes; i++)
+  // int global_rank;
+  // MPI_Comm_rank(MPI_COMM_WORLD, &global_rank);
+
+	MPI_Comm_rank(MPI_COMM_WORLD, &process_rank);
+	MPI_Comm_size(MPI_COMM_WORLD, &process_size);
+
+  // Each process will work on vertices [start_vertex, end_vertex).
+  for (uintV u = verticesArray[process_rank]; u < verticesArray[process_rank + 1]; u++)
   {
-    start_vertex = end_vertex;
-    long count = 0;
-    while (end_vertex < n)
+    uintE out_degree = g.vertices_[u].getOutDegree();
+    uintE edges_processed = 0; // // used in output validation
+    edges_processed += out_degree;
+
+    // for vertex 'v' in outNeighbor(u)
+    for (uintE i = 0; i < out_degree; i++)
     {
-      // add vertices unil we reach m/P edges
-      count += g.vertices_[end_vertex].getOutDegree();
-      end_vertex++;
-      if (count >= edges_per_process)
-      {
-        break;
-      }
-    }
-    if (i == global_rank)
-    {
-      break;
+      uintV v = g.vertices_[u].getOutNeighbor(i);
+      local_count += countTriangles(g.vertices_[u].getInNeighbors(),
+                                    g.vertices_[u].getInDegree(),
+                                    g.vertices_[v].getOutNeighbors(),
+                                    g.vertices_[v].getOutDegree(),
+                                    u,
+                                    v);
     }
   }
 
-  // Each process will work on vertices [start_vertex, end_vertex).
-  for (int p; p < processes; p++)
+  // --- synchronization phase start ---
+  if (process_rank == ROOT_PROCESS)
   {
-    long local_count = 0;
-    // for each vertex 'u' allocated to P
-    for (uintV u = start_vertex; u < end_vertex; u++)
+    global_count += local_count;
+    for (int i = 1; i < process_size; i++)
     {
-      uintE out_degree = g.vertices_[u].getOutDegree();
-      uintE edges_processed = 0; // // used in output validation
-      edges_processed += out_degree;
-
-      // for vertex 'v' in outNeighbor(u)
-      for (uintE i = 0; i < out_degree; i++)
-      {
-        uintV v = g.vertices_[u].getOutNeighbor(i);
-        local_count += countTriangles(g.vertices_[u].getInNeighbors(),
-                                      g.vertices_[u].getInDegree(),
-                                      g.vertices_[v].getOutNeighbors(),
-                                      g.vertices_[v].getOutDegree(),
-                                      u,
-                                      v);
-      }
-    }
-    // --- synchronization phase start ---
-    // if(P is root process){
-    //     global_count = Sum of local counts of all the processes
-    // }
-    // else{
-    // depending on the strategy,
-    // use appropriate API to send the local_count to the root process
-    // }
-
-    if (global_rank == ROOT_PROCESS)
-    {
+      // TODO: Not too sure if it is correct
+      MPI_Recv(&local_count, 1, MPI_LONG, i, 0, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
       global_count += local_count;
     }
-    else
-    {
-      MPI_Send(&local_count, 1, MPI_LONG, ROOT_PROCESS, 0, MPI_COMM_WORLD);
-    }
+  }
+  else
+  {
+    MPI_Send(&local_count, 1, MPI_LONG, ROOT_PROCESS, 0, MPI_COMM_WORLD);
+  }
+  // --- synchronization phase end -----
+
+  if (process_rank == ROOT_PROCESS)
+  {
+    global_count = global_count / 3;
+    std::printf("Number of triangles : %ld\n", global_count);
+    std::printf("Number of unique triangles : %ld\n", global_count / 3);
+    std::printf("Time taken (in seconds) : %f\n", time_taken);
+    MPI_Finalize();
+    return
+  }
+  else
+  {
+    std::printf("Number of triangles : %ld\n", local_count);
+    std::printf("Number of unique triangles : %ld\n", local_count / 3);
+    std::printf("Time taken (in seconds) : %f\n", time_taken);
+    MPI_Finalize();
+    return;
+  } 
+
+
+  // // Each process will work on vertices [start_vertex, end_vertex).
+  // for (int p; p < processes; p++)
+  // {
+  //   long local_count = 0;
+  //   // for each vertex 'u' allocated to P
+  //   for (uintV u = start_vertex; u < end_vertex; u++)
+  //   {
+  //     uintE out_degree = g.vertices_[u].getOutDegree();
+  //     uintE edges_processed = 0; // // used in output validation
+  //     edges_processed += out_degree;
+
+  //     // for vertex 'v' in outNeighbor(u)
+  //     for (uintE i = 0; i < out_degree; i++)
+  //     {
+  //       uintV v = g.vertices_[u].getOutNeighbor(i);
+  //       local_count += countTriangles(g.vertices_[u].getInNeighbors(),
+  //                                     g.vertices_[u].getInDegree(),
+  //                                     g.vertices_[v].getOutNeighbors(),
+  //                                     g.vertices_[v].getOutDegree(),
+  //                                     u,
+  //                                     v);
+  //     }
+  //   }
+  //   // --- synchronization phase start ---
+  //   // if(P is root process){
+  //   //     global_count = Sum of local counts of all the processes
+  //   // }
+  //   // else{
+  //   // depending on the strategy,
+  //   // use appropriate API to send the local_count to the root process
+  //   // }
+
+  //   if (global_rank == ROOT_PROCESS)
+  //   {
+  //     global_count += local_count;
+  //   }
+  //   else
+  //   {
+  //     MPI_Send(&local_count, 1, MPI_LONG, ROOT_PROCESS, 0, MPI_COMM_WORLD);
+  //   }
 
     // --- synchronization phase end -----
     // if(P is root process){
@@ -204,24 +242,24 @@ void triangleCountMPI(Graph &g, uint processes, uint rank)
     // else{
     //     // print process statistics
     // }
-    if (global_rank == ROOT_PROCESS)
-    {
-      global_count = global_count / 3;
-      std::printf("Number of triangles : %ld\n", global_count);
-      std::printf("Number of unique triangles : %ld\n", global_count / 3);
-      std::printf("Time taken (in seconds) : %f\n", time_taken);
-      MPI_Finalize();
-      return
-    }
-    else
-    {
-      std::printf("Number of triangles : %ld\n", local_count);
-      std::printf("Number of unique triangles : %ld\n", local_count / 3);
-      std::printf("Time taken (in seconds) : %f\n", time_taken);
-      MPI_Finalize();
-      return;
-    }
-  }
+    // if (global_rank == ROOT_PROCESS)
+    // {
+    //   global_count = global_count / 3;
+    //   std::printf("Number of triangles : %ld\n", global_count);
+    //   std::printf("Number of unique triangles : %ld\n", global_count / 3);
+    //   std::printf("Time taken (in seconds) : %f\n", time_taken);
+    //   MPI_Finalize();
+    //   return
+    // }
+    // else
+    // {
+    //   std::printf("Number of triangles : %ld\n", local_count);
+    //   std::printf("Number of unique triangles : %ld\n", local_count / 3);
+    //   std::printf("Time taken (in seconds) : %f\n", time_taken);
+    //   MPI_Finalize();
+    //   return;
+    // }
+  // }
 }
 
 int main(int argc, char *argv[])
@@ -266,11 +304,11 @@ int main(int argc, char *argv[])
     break;
 
   case 1:
-    triangleCountMPI(g, world_size, world_rank);
+    triangleCountMPI(g, world_size, world_rank, verticesArray);
     break;
   }
 
   MPI_Finalize();
-
+  delete[] verticesArray;
   return 0;
 }
