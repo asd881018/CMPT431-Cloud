@@ -118,7 +118,7 @@ void assignWorkBasedOnEdges(Graph &g, uintV *partitionArray, uintV *sendcounts, 
     }
 }
 
-void pageRankParallelReduceAndScatter(Graph &g, int maxIters, uintV *partitionArray, uintV *sendcounts)
+void pageRankParallelReduceAndScatter(Graph &g, int maxIters, uintV *partitionArray, uintV *sendcounts, uint strategy)
 {
     uintV n = g.n_;
     long edges_processed = 0;
@@ -138,14 +138,7 @@ void pageRankParallelReduceAndScatter(Graph &g, int maxIters, uintV *partitionAr
     {
         pr_curr[i] = INIT_PAGE_RANK;
         pr_next[i] = 0.0;
-        // pr_recv[i] = 0.0;
     }
-
-    // PageRankType *global_pr_next = nullptr;
-    // if (world_rank == ROOT_PROCESS)
-    // {
-    //     global_pr_next = new PageRankType[n](); // Allocate memory and initialize to zero
-    // }
 
     for (int i = 0; i < maxIters; i++)
     {
@@ -164,22 +157,31 @@ void pageRankParallelReduceAndScatter(Graph &g, int maxIters, uintV *partitionAr
         // --- synchronization phase 1 start ---
         communication_timer.start();
 
-        /*
-            MPI_Reduce(void* send_data, void* recv_data, int count,
-            MPI_Datatype datatype, MPI_Op op, int root, MPI_Comm communicator)
-        */
-        // Sum up next_page_rank values across all processes
-        MPI_Reduce(pr_next, pr_recv, n,
-                   PAGERANK_MPI_TYPE, MPI_SUM, ROOT_PROCESS, MPI_COMM_WORLD);
+        if (strategy == 1)
+        {
+            /*
+                MPI_Reduce(void* send_data, void* recv_data, int count,
+                MPI_Datatype datatype, MPI_Op op, int root, MPI_Comm communicator)
+            */
+            // Sum up next_page_rank values across all processes
+            MPI_Reduce(pr_next, pr_recv, n,
+                       PAGERANK_MPI_TYPE, MPI_SUM, ROOT_PROCESS, MPI_COMM_WORLD);
 
-        /*
-        MPI_SCATTERV(SENDBUF, SENDCOUNTS, DISPLS, SENDTYPE,
-                     RECVBUF, RECVCOUNT,
-                     RECVTYPE, ROOT, COMM, IERROR)
-        */
-        MPI_Scatterv(pr_recv, sendcounts, partitionArray, PAGERANK_MPI_TYPE,
-                     pr_recv_partial, (partitionArray[world_rank + 1] - partitionArray[world_rank]),
-                     PAGERANK_MPI_TYPE, ROOT_PROCESS, MPI_COMM_WORLD);
+            /*
+            MPI_SCATTERV(SENDBUF, SENDCOUNTS, DISPLS, SENDTYPE,
+                         RECVBUF, RECVCOUNT,
+                         RECVTYPE, ROOT, COMM, IERROR)
+            */
+            MPI_Scatterv(pr_recv, sendcounts, partitionArray, PAGERANK_MPI_TYPE,
+                         pr_recv_partial, (partitionArray[world_rank + 1] - partitionArray[world_rank]),
+                         PAGERANK_MPI_TYPE, ROOT_PROCESS, MPI_COMM_WORLD);
+        }
+        if (strategy == 2)
+        {
+            for (int i = 0; i < world_size; i++)
+                MPI_Reduce(&pr_next[partitionArray[i]], pr_recv_partial, sendcounts[i], PAGERANK_MPI_TYPE, MPI_SUM, i, MPI_COMM_WORLD);
+            break;
+        }
         communication_time += communication_timer.stop();
         // --- synchronization phase 1 end -----
 
@@ -209,7 +211,6 @@ void pageRankParallelReduceAndScatter(Graph &g, int maxIters, uintV *partitionAr
     if (world_rank == ROOT_PROCESS)
     {
         std::printf("Sum of page rank : " PR_FMT "\n", global_sum);
-        // delete[] global_pr_next;
     }
 
     delete[] pr_curr;
@@ -270,7 +271,10 @@ int main(int argc, char *argv[])
         pageRankSerial(g, max_iterations);
         break;
     case 1:
-        pageRankParallelReduceAndScatter(g, max_iterations, partitionArray, sendcounts);
+        pageRankParallelReduceAndScatter(g, max_iterations, partitionArray, sendcounts, strategy);
+        break;
+    case 2:
+        pageRankParallelReduceAndScatter(g, max_iterations, partitionArray, sendcounts, strategy);
         break;
     }
 
