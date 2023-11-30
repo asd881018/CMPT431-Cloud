@@ -139,7 +139,6 @@ void assignWorkBasedOnEdges(Graph &g, uintV *partitionArray, uintV n, uintE m, c
   // }
 }
 
-// triangleCountMPI(g, world_rank, partitionArray);
 void triangleCountMPIGather(Graph &g, int world_rank, uintV *partitionArray)
 {
   uintE edges_processed = 0;
@@ -170,9 +169,13 @@ void triangleCountMPIGather(Graph &g, int world_rank, uintV *partitionArray)
   }
 
   // --- synchronization phase start ---
-
   communication_timer.start();
-  MPI_Reduce(&local_count, &global_count, 1, MPI_LONG, MPI_SUM, ROOT_PROCESS, MPI_COMM_WORLD);
+  long *local_counts = nullptr;
+  if (process_rank == ROOT_PROCESS)
+  {
+    local_counts = new long[process_size];
+  }
+  MPI_Gather(&local_count, 1, MPI_LONG, local_counts, 1, MPI_LONG, ROOT_PROCESS, MPI_COMM_WORLD);
   double communication_time = communication_timer.stop();
   // --- synchronization phase end -----
 
@@ -180,6 +183,9 @@ void triangleCountMPIGather(Graph &g, int world_rank, uintV *partitionArray)
 
   if (process_rank == ROOT_PROCESS)
   {
+    global_count = std::accumulate(local_counts, local_counts + process_size, 0L);
+    delete[] local_counts;
+
     std::printf("Number of triangles : %ld\n", global_count);
     std::printf("Number of unique triangles : %ld\n", global_count / 3);
   }
@@ -215,25 +221,8 @@ void triangleCountMPIReduce(Graph &g, int world_rank, uintV *partitionArray)
   }
 
   // --- synchronization phase start ---
-
   communication_timer.start();
-  long *local_counts = nullptr;
-  if (process_rank == ROOT_PROCESS)
-  {
-    local_counts = new long[process_size];
-    // global_count += local_count;
-    // for (int i = 1; i < process_size; i++)
-    // {
-    //   long recv_count = 0;
-    //   MPI_Recv(&recv_count, 1, MPI_LONG, i, ROOT_PROCESS, MPI_COMM_WORLD, MPI_STATUS_IGNORE);
-    //   global_count += recv_count;
-    // }
-  }
-  MPI_Gather(&local_count, 1, MPI_LONG, local_counts, 1, MPI_LONG, ROOT_PROCESS, MPI_COMM_WORLD);
-  // else
-  // {
-  //   MPI_Send(&local_count, 1, MPI_LONG, ROOT_PROCESS, 0, MPI_COMM_WORLD);
-  // }
+  MPI_Reduce(&local_count, &global_count, 1, MPI_LONG, MPI_SUM, ROOT_PROCESS, MPI_COMM_WORLD);
   double communication_time = communication_timer.stop();
   // --- synchronization phase end -----
 
@@ -241,9 +230,6 @@ void triangleCountMPIReduce(Graph &g, int world_rank, uintV *partitionArray)
 
   if (process_rank == ROOT_PROCESS)
   {
-    global_count = std::accumulate(local_counts, local_counts + process_size, 0L);
-    delete[] local_counts;
-
     std::printf("Number of triangles : %ld\n", global_count);
     std::printf("Number of unique triangles : %ld\n", global_count / 3);
   }
