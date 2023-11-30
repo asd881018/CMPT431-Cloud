@@ -170,7 +170,52 @@ void triangleCountMPIGather(Graph &g, int world_rank, uintV *partitionArray)
   }
 
   // --- synchronization phase start ---
-  
+
+  communication_timer.start();
+  MPI_Reduce(&local_count, &global_count, 1, MPI_LONG, MPI_SUM, ROOT_PROCESS, MPI_COMM_WORLD);
+  double communication_time = communication_timer.stop();
+  // --- synchronization phase end -----
+
+  std::printf("%d, %d, %ld, %f\n", process_rank, edges_processed, local_count, communication_time);
+
+  if (process_rank == ROOT_PROCESS)
+  {
+    std::printf("Number of triangles : %ld\n", global_count);
+    std::printf("Number of unique triangles : %ld\n", global_count / 3);
+  }
+}
+
+void triangleCountMPIReduce(Graph &g, int world_rank, uintV *partitionArray)
+{
+  uintE edges_processed = 0;
+  long local_count = 0, global_count = 0;
+  timer communication_timer;
+
+  int process_rank, process_size;
+  MPI_Comm_rank(MPI_COMM_WORLD, &process_rank);
+  MPI_Comm_size(MPI_COMM_WORLD, &process_size);
+
+  // Each process will work on vertices [start_vertex, end_vertex).
+  for (uintV u = partitionArray[process_rank]; u < partitionArray[process_rank + 1]; u++)
+  {
+    uintE out_degree = g.vertices_[u].getOutDegree();
+    edges_processed += out_degree; // used in output validation
+
+    // for vertex 'v' in outNeighbor(u)
+    for (uintE i = 0; i < out_degree; i++)
+    {
+      uintV v = g.vertices_[u].getOutNeighbor(i);
+      local_count += countTriangles(g.vertices_[u].getInNeighbors(),
+                                    g.vertices_[u].getInDegree(),
+                                    g.vertices_[v].getOutNeighbors(),
+                                    g.vertices_[v].getOutDegree(),
+                                    u,
+                                    v);
+    }
+  }
+
+  // --- synchronization phase start ---
+
   communication_timer.start();
   long *local_counts = nullptr;
   if (process_rank == ROOT_PROCESS)
@@ -202,10 +247,6 @@ void triangleCountMPIGather(Graph &g, int world_rank, uintV *partitionArray)
     std::printf("Number of triangles : %ld\n", global_count);
     std::printf("Number of unique triangles : %ld\n", global_count / 3);
   }
-}
-
-void triangleCountMPIReduce(Graph &g, int world_rank, uintV *partitionArray){
-
 }
 
 int main(int argc, char *argv[])
