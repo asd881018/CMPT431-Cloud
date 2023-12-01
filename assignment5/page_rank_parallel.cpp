@@ -7,6 +7,7 @@
 #include <mpi.h>
 #include <stdio.h>
 #include <algorithm>
+#include <memory>
 
 #ifdef USE_INT
 #define INIT_PAGE_RANK 100000
@@ -91,7 +92,7 @@ void pageRankSerial(Graph &g, int max_iters)
 void assignWorkBasedOnEdges(Graph &g, uintV *partitionArray, uintV *sendcounts, uintV n, const uint processes, uint)
 {
     uintE edgeSum = std::accumulate(g.vertices_, g.vertices_ + n, 0, [](uintE sum, Vertex &v)
-                              { return sum + v.getOutDegree(); });
+                                    { return sum + v.getOutDegree(); });
     uintE edges_per_process = edgeSum / processes;
     uintE edgeCount = 0;
     int curr_process = 0;
@@ -120,22 +121,31 @@ void assignWorkBasedOnEdges(Graph &g, uintV *partitionArray, uintV *sendcounts, 
     }
 }
 
-void executeStrategy1(PageRankType *pr_next, PageRankType *pr_recv, int n, int *sendcounts, uintV *partitionArray, PageRankType *pr_recv_partial, int world_rank)
+void executeStrategy1(std::unique_ptr<PageRankType[]> &pr_next,
+                      std::unique_ptr<PageRankType[]> &pr_recv,
+                      int n, int *sendcounts,
+                      uintV *partitionArray,
+                      std::unique_ptr<PageRankType[]> &pr_recv_partial,
+                      int world_rank)
 {
     // Sum up next_page_rank values across all processes
-    MPI_Reduce(pr_next, pr_recv, n, PAGERANK_MPI_TYPE, MPI_SUM, ROOT_PROCESS, MPI_COMM_WORLD);
+    MPI_Reduce(pr_next.get(), pr_recv.get(), n, PAGERANK_MPI_TYPE, MPI_SUM, ROOT_PROCESS, MPI_COMM_WORLD);
 
     // Scatter the aggregated next_page_rank values to all processes
-    MPI_Scatterv(pr_recv, sendcounts, partitionArray, PAGERANK_MPI_TYPE,
-                 pr_recv_partial, (partitionArray[world_rank + 1] - partitionArray[world_rank]),
+    MPI_Scatterv(pr_recv.get(), sendcounts, partitionArray, PAGERANK_MPI_TYPE,
+                 pr_recv_partial.get(), (partitionArray[world_rank + 1] - partitionArray[world_rank]),
                  PAGERANK_MPI_TYPE, ROOT_PROCESS, MPI_COMM_WORLD);
 }
 
-void executeStrategy2(PageRankType *pr_next, PageRankType *pr_recv_partial, int *sendcounts, uintV *partitionArray, int world_size)
+void executeStrategy2(std::unique_ptr<PageRankType[]> &pr_next,
+                      std::unique_ptr<PageRankType[]> &pr_recv_partial,
+                      int *sendcounts,
+                      uintV *partitionArray,
+                      int world_size)
 {
     for (int i = 0; i < world_size; i++)
     {
-        MPI_Reduce(&pr_next[partitionArray[i]], pr_recv_partial, sendcounts[i], PAGERANK_MPI_TYPE, MPI_SUM, i, MPI_COMM_WORLD);
+        MPI_Reduce(pr_next.get() + partitionArray[i], pr_recv_partial.get(), sendcounts[i], PAGERANK_MPI_TYPE, MPI_SUM, i, MPI_COMM_WORLD);
     }
 }
 
@@ -150,14 +160,10 @@ void pageRankParallelReduceAndScatter(Graph &g, int maxIters, uintV *partitionAr
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 
-    PageRankType *pr_curr = new PageRankType[n];
-    PageRankType *pr_next = new PageRankType[n];
-    PageRankType *pr_recv = new PageRankType[n];
-    PageRankType *pr_recv_partial = new PageRankType[partitionArray[world_rank + 1] - partitionArray[world_rank]];
-    // std::unique_ptr<PageRankType[]> pr_curr(new PageRankType[n]);
-    // std::unique_ptr<PageRankType[]> pr_next(new PageRankType[n]);
-    // std::unique_ptr<PageRankType[]> pr_recv(new PageRankType[n]);
-    // std::unique_ptr<PageRankType[]> pr_recv_partial(new PageRankType[partitionArray[world_rank + 1] - partitionArray[world_rank]]);
+    std::unique_ptr<PageRankType[]> pr_curr(new PageRankType[n]);
+    std::unique_ptr<PageRankType[]> pr_next(new PageRankType[n]);
+    std::unique_ptr<PageRankType[]> pr_recv(new PageRankType[n]);
+    std::unique_ptr<PageRankType[]> pr_recv_partial(new PageRankType[partitionArray[world_rank + 1] - partitionArray[world_rank]]);
 
     for (uintV i = 0; i < n; i++)
     {
@@ -203,15 +209,11 @@ void pageRankParallelReduceAndScatter(Graph &g, int maxIters, uintV *partitionAr
         }
 
         // Reset next_page_rank[v] to 0 for all vertices
-        std::fill(pr_next, pr_next + n, 0.0);
-        // for (uintV v = 0; v < n; v++)
-        // {
-        //     pr_next[v] = 0.0;
-        // }
+        std::fill(pr_next.get(), pr_next.get() + n, 0.0);
     }
 
     // Loop 3
-    PageRankType local_sum = std::accumulate(pr_curr + partitionArray[world_rank], pr_curr + partitionArray[world_rank + 1], 0.0);
+    PageRankType local_sum = std::accumulate(pr_curr.get() + partitionArray[world_rank], pr_curr.get() + partitionArray[world_rank + 1], 0.0);
 
     // --- synchronization phase 2 start -----
     PageRankType global_sum = 0;
@@ -224,11 +226,6 @@ void pageRankParallelReduceAndScatter(Graph &g, int maxIters, uintV *partitionAr
     {
         std::printf("Sum of page rank : " PR_FMT "\n", global_sum);
     }
-
-    delete[] pr_curr;
-    delete[] pr_next;
-    delete[] pr_recv;
-    delete[] pr_recv_partial;
 }
 
 int main(int argc, char *argv[])
@@ -270,23 +267,20 @@ int main(int argc, char *argv[])
     g.readGraphFromBinary<int>(input_file_path);
 
     uintV n = g.n_;
-    uintV *partitionArray = new uintV[world_size];
-    uintV *sendcounts = new uintV[world_size]();
-    assignWorkBasedOnEdges(g, partitionArray, sendcounts, n, world_size, world_rank);
+    std::unique_ptr<uintV[]> partitionArray(new uintV[world_size + 1]);
+    std::unique_ptr<uintV[]> sendcounts(new uintV[world_size]());
+    assignWorkBasedOnEdges(g, partitionArray.get(), sendcounts.get(), n, world_size, world_rank);
 
     timer total_timer;
     total_timer.start();
 
     switch (strategy)
     {
-    case 0:
-        pageRankSerial(g, max_iterations);
-        break;
     case 1:
-        pageRankParallelReduceAndScatter(g, max_iterations, partitionArray, sendcounts, strategy);
+        pageRankParallelReduceAndScatter(g, max_iterations, partitionArray.get(), sendcounts.get(), strategy);
         break;
     case 2:
-        pageRankParallelReduceAndScatter(g, max_iterations, partitionArray, sendcounts, strategy);
+        pageRankParallelReduceAndScatter(g, max_iterations, partitionArray.get(), sendcounts.get(), strategy);
         break;
     }
 
@@ -297,7 +291,5 @@ int main(int argc, char *argv[])
     }
 
     MPI_Finalize();
-    delete[] partitionArray;
-    delete[] sendcounts;
     return 0;
 }
