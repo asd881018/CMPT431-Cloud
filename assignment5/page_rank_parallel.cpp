@@ -128,12 +128,14 @@ void executeStrategy1(std::unique_ptr<PageRankType[]> &pr_next,
                       std::unique_ptr<PageRankType[]> &pr_recv_partial,
                       int world_rank)
 {
+    uintV startV = partitionArray[world_rank];
+    uintV endV = partitionArray[world_rank + 1];
     // Sum up next_page_rank values across all processes
     MPI_Reduce(pr_next.get(), pr_recv.get(), n, PAGERANK_MPI_TYPE, MPI_SUM, ROOT_PROCESS, MPI_COMM_WORLD);
 
     // Scatter the aggregated next_page_rank values to all processes
     MPI_Scatterv(pr_recv.get(), sendcounts, partitionArray, PAGERANK_MPI_TYPE,
-                 pr_recv_partial.get(), (partitionArray[world_rank + 1] - partitionArray[world_rank]),
+                 pr_recv_partial.get(), (endV - startV),
                  PAGERANK_MPI_TYPE, ROOT_PROCESS, MPI_COMM_WORLD);
 }
 
@@ -149,7 +151,7 @@ void executeStrategy2(std::unique_ptr<PageRankType[]> &pr_next,
     }
 }
 
-void pageRankParallelReduceAndScatter(Graph &g, int maxIters, uintV *partitionArray, uintV *sendcounts, uint strategy)
+void pageRankParallelReduceAndScatter(Graph &g, int maxIters, uintV *partitionArray, uintV *sendcounts)
 {
     uintV n = g.n_;
     long edges_processed = 0;
@@ -160,10 +162,13 @@ void pageRankParallelReduceAndScatter(Graph &g, int maxIters, uintV *partitionAr
     MPI_Comm_size(MPI_COMM_WORLD, &world_size);
     MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
 
+    uintV startV = partitionArray[world_rank];
+    uintV endV = partitionArray[world_rank + 1];
+
     std::unique_ptr<PageRankType[]> pr_curr(new PageRankType[n]);
     std::unique_ptr<PageRankType[]> pr_next(new PageRankType[n]);
     std::unique_ptr<PageRankType[]> pr_recv(new PageRankType[n]);
-    std::unique_ptr<PageRankType[]> pr_recv_partial(new PageRankType[partitionArray[world_rank + 1] - partitionArray[world_rank]]);
+    std::unique_ptr<PageRankType[]> pr_recv_partial(new PageRankType[endV - startV]);
 
     for (uintV i = 0; i < n; i++)
     {
@@ -173,8 +178,9 @@ void pageRankParallelReduceAndScatter(Graph &g, int maxIters, uintV *partitionAr
 
     for (int i = 0; i < maxIters; i++)
     {
+
         // Loop 1
-        for (uintV u = partitionArray[world_rank]; u < partitionArray[world_rank + 1]; u++)
+        for (uintV u = startV; u < endV; u++)
         {
             uintE out_degree = g.vertices_[u].getOutDegree();
             edges_processed += out_degree;
@@ -187,24 +193,13 @@ void pageRankParallelReduceAndScatter(Graph &g, int maxIters, uintV *partitionAr
 
         // --- synchronization phase 1 start ---
         communication_timer.start();
-        switch (strategy)
-        {
-        case 1:
-            executeStrategy1(pr_next, pr_recv, n, sendcounts, partitionArray, pr_recv_partial, world_rank);
-            break;
-        case 2:
-            executeStrategy2(pr_next, pr_recv_partial, sendcounts, partitionArray, world_size);
-            break;
-
-        default:
-            break;
-        }
+        executeStrategy1(pr_next, pr_recv, n, sendcounts, partitionArray, pr_recv_partial, world_rank);
         communication_time += communication_timer.stop();
         // --- synchronization phase 1 end -----
 
-        for (uintV v = partitionArray[world_rank]; v < partitionArray[world_rank + 1]; v++)
+        for (uintV v = startV; v < endV; v++)
         {
-            pr_next[v] = PAGE_RANK(pr_recv_partial[v - partitionArray[world_rank]]);
+            pr_next[v] = PAGE_RANK(pr_recv_partial[v - startV]);
             pr_curr[v] = pr_next[v];
         }
 
@@ -213,7 +208,78 @@ void pageRankParallelReduceAndScatter(Graph &g, int maxIters, uintV *partitionAr
     }
 
     // Loop 3
-    PageRankType local_sum = std::accumulate(pr_curr.get() + partitionArray[world_rank], pr_curr.get() + partitionArray[world_rank + 1], 0.0);
+    PageRankType local_sum = std::accumulate(pr_curr.get() + startV, pr_curr.get() + endV, 0.0);
+
+    // --- synchronization phase 2 start -----
+    PageRankType global_sum = 0;
+    MPI_Reduce(&local_sum, &global_sum, 1, PAGERANK_MPI_TYPE, MPI_SUM, ROOT_PROCESS, MPI_COMM_WORLD);
+    // --- synchronization phase 2 end -----
+
+    std::printf("%d, %ld, %f\n", world_rank, edges_processed, communication_time);
+
+    if (world_rank == ROOT_PROCESS)
+    {
+        std::printf("Sum of page rank : " PR_FMT "\n", global_sum);
+    }
+}
+
+void pageRankParallelReduce(Graph &g, int maxIters, uintV *partitionArray, uintV *sendcounts)
+{
+    uintV n = g.n_;
+    long edges_processed = 0;
+    timer communication_timer;
+    double communication_time = 0.0;
+
+    int world_size, world_rank;
+    MPI_Comm_size(MPI_COMM_WORLD, &world_size);
+    MPI_Comm_rank(MPI_COMM_WORLD, &world_rank);
+
+    uintV startV = partitionArray[world_rank];
+    uintV endV = partitionArray[world_rank + 1];
+
+    std::unique_ptr<PageRankType[]> pr_curr(new PageRankType[n]);
+    std::unique_ptr<PageRankType[]> pr_next(new PageRankType[n]);
+    std::unique_ptr<PageRankType[]> pr_recv(new PageRankType[n]);
+    std::unique_ptr<PageRankType[]> pr_recv_partial(new PageRankType[endV - startV]);
+
+    for (uintV i = 0; i < n; i++)
+    {
+        pr_curr[i] = INIT_PAGE_RANK;
+        pr_next[i] = 0.0;
+    }
+
+    for (int i = 0; i < maxIters; i++)
+    {
+        // Loop 1
+        for (uintV u = startV; u < endV; u++)
+        {
+            uintE out_degree = g.vertices_[u].getOutDegree();
+            edges_processed += out_degree;
+            for (uintE i = 0; i < out_degree; i++)
+            {
+                uintV v = g.vertices_[u].getOutNeighbor(i);
+                pr_next[v] += (pr_curr[u] / out_degree);
+            }
+        }
+
+        // --- synchronization phase 1 start ---
+        communication_timer.start();
+        executeStrategy2(pr_next, pr_recv_partial, sendcounts, partitionArray, world_size);
+        communication_time += communication_timer.stop();
+        // --- synchronization phase 1 end -----
+
+        for (uintV v = startV; v < endV; v++)
+        {
+            pr_next[v] = PAGE_RANK(pr_recv_partial[v - startV]);
+            pr_curr[v] = pr_next[v];
+        }
+
+        // Reset next_page_rank[v] to 0 for all vertices
+        std::fill(pr_next.get(), pr_next.get() + n, 0.0);
+    }
+
+    // Loop 3
+    PageRankType local_sum = std::accumulate(pr_curr.get() + startV, pr_curr.get() + endV, 0.0);
 
     // --- synchronization phase 2 start -----
     PageRankType global_sum = 0;
@@ -276,11 +342,14 @@ int main(int argc, char *argv[])
 
     switch (strategy)
     {
+    case 0:
+        pageRankSerial(g, max_iterations);
+        break;
     case 1:
-        pageRankParallelReduceAndScatter(g, max_iterations, partitionArray.get(), sendcounts.get(), strategy);
+        pageRankParallelReduceAndScatter(g, max_iterations, partitionArray.get(), sendcounts.get());
         break;
     case 2:
-        pageRankParallelReduceAndScatter(g, max_iterations, partitionArray.get(), sendcounts.get(), strategy);
+        pageRankParallelReduce(g, max_iterations, partitionArray.get(), sendcounts.get());
         break;
     }
 
