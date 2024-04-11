@@ -30,26 +30,6 @@ Building on the foundations laid in Assignment 1, this assignment delves into re
    - **Edge-based Task Decomposition:** Ensures an equitable distribution of edges to threads (`--strategy 2`).
    - **Dynamic Task Mapping and Granularity:** Introduces a dynamic allocation mechanism with configurable granularity (`--strategy 3`, `--granularity`).
 
-## Reporting and Analysis
-
-- A structured report is to be submitted, addressing specific questions tied to each strategy's implementation and outcome.
-- The report template, **Assignment 2 - Report**, provides a framework for your analysis.
-
-## Output Format and Submission Details
-
-- Implementations must adhere to the prescribed output formats, capturing thread-wise computations and timings.
-- Your solutions should be named `triangle_counting_parallel.cpp` and `page_rank_parallel.cpp`, with a Makefile generating the corresponding binaries.
-- Submissions must include:
-  - The complete source code.
-  - A tar.gz package of the solution directory.
-  - A PDF document of the filled report, addressing all questions.
-
-### Submission Steps
-
-1. Clean your solution folder (`$ make clean`).
-2. Create a tar.gz file (`$ tar cvzf assignment2.tar.gz *`).
-3. Validate the submission package (`$ python /scratch/assignment2/test_scripts/submission_validator.pyc --tarPath=assignment2.tar.gz`).
-4. Download and submit the report PDF via CourSys.
 
 ## Important Links and Resources
 
