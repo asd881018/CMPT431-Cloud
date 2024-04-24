@@ -2,14 +2,8 @@
 
 This serves as a refresher for multi-threaded programming using pthreads.
 
-### Prerequisites
-
-Before commencing this assignment, ensure you have completed **Tutorial 1** which guides you through using our servers for code development. A quick review of pthreads can be found [here](#).
-
 ### General Instructions
 
-- Source code is provided [here](#). We use **g++ 7.5.0**, pre-installed on our servers.
-- To compile, execute `make producer_consumer`. This creates a binary file named `producer_consumer`.
 - Create a slurm job to run the binary with:
 `./producer_consumer --nItems 100000 --nProducers 2 --nConsumers 4 --bufferSize 100000`
 
